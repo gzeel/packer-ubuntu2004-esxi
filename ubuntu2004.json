@@ -1,0 +1,104 @@
+{
+    "variables": {
+        "vm_name": "packer-Ubuntu-20.04-amd64",
+        "numvcpus": "1",
+        "memsize": "2048",
+        "disk_size": "40960",
+        "iso_url": "https://mirror.nl.leaseweb.net/ubuntu-releases/20.04.4/ubuntu-20.04.4-live-server-amd64.iso",
+        "iso_checksum": "28ccdb56450e643bad03bb7bcf7507ce3d8d90e8bf09e38f6bd9ac298a98eaad",
+        "ssh_username" : "packer",
+        "ssh_password" : "packer",
+        "boot_wait": "5s",
+        "esxi_vmnetwork": "VM Network",
+        "esxi_user": "root" 
+      },
+      "builders": [
+        {
+          "type": "vmware-iso",
+          "format": "vmx",
+          "version": 19,
+          "boot_wait": "{{ user `boot_wait` }}",
+          "boot_command": [
+            "<esc><esc><esc>",
+            "<enter><wait>",
+            "/casper/vmlinuz ",
+            "root=/dev/sr0 ",
+            "initrd=/casper/initrd ",
+            "autoinstall ",
+            "ds=nocloud-net;s=http://{{ user `host_ip` }}:{{ .HTTPPort }}/",
+            "<enter>"
+          ],
+          "disk_size": "{{ user `disk_size` }}",
+          "cpus": "1",
+          "memory": "2048",
+          "disk_type_id": "thin",
+          "guest_os_type": "ubuntu-64",
+          "headless": true,
+          "vnc_over_websocket": true,
+          "http_directory": "http",
+          "http_port_min": "8472",
+          "http_port_max": "8472",
+          "insecure_connection": true,
+          "iso_checksum": "{{ user `iso_checksum` }}",
+          "iso_url": "{{ user `iso_url` }}",
+          "shutdown_command": "echo 'packer'|sudo -S shutdown -P now",
+          "ssh_password": "{{ user `ssh_password` }}",
+          "ssh_port": 22,
+          "ssh_username": "{{ user `ssh_username` }}",
+          "ssh_pty": true,
+          "ssh_timeout": "30m",
+          "ssh_handshake_attempts": "100",
+          "remote_type": "esx5",
+          "remote_host": "{{ user `esxi_remote_host` }}",
+          "remote_datastore": "{{ user `esxi_datastore` }}",
+          "remote_username": "{{ user `esxi_user` }}",
+          "remote_password": "{{user `esxi_password`}}",
+          "vm_name": "{{ user `vm_name` }}",
+          "vmx_data": {
+            "cpuid.coresPerSocket": "1",
+            "ethernet0.pciSlotNumber": "32",
+            "ethernet0.networkName": "{{ user `esxi_vmnetwork` }}"
+          },
+          "vmx_remove_ethernet_interfaces": true
+        }
+      ],
+  
+    "provisioners": [
+      {
+        "type": "shell", 
+        "execute_command": "echo 'packer'|{{.Vars}} sudo -S -E bash '{{.Path}}'",
+        "inline": [
+          "/usr/bin/cloud-init status --wait",
+          "apt -y update && apt -y upgrade",
+          "apt -y install python3-pip",
+          "pip3 --no-cache-dir install ansible"
+        ]
+      },
+      {
+        "type": "ansible-local",
+        "playbook_file": "scripts/setup.yml",
+        "galaxy_file": "scripts/requirements.yml"
+      },
+      {
+        "type": "shell",
+        "execute_command": "echo 'packer'|{{.Vars}} sudo -S -E bash '{{.Path}}'",
+        "scripts": ["scripts/networking.sh",
+                    "scripts/cleanup.sh"]
+      }
+    ],
+  
+    "post-processors": [
+      [
+        {
+          "output": "builds/{{.Provider}}-ubuntu2004.box",
+          "type": "vagrant"
+        },
+        {
+          "type": "vagrant-cloud",
+          "box_tag": "{{user `boxname`}}",
+          "version": "{{user `version`}}"
+        }
+      ]
+    ]
+  }
+  
