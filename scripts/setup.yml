@@ -3,6 +3,10 @@
   hosts: localhost
   gather_facts: yes
   become: yes
+
+  roles:
+  - role: gzeel.packer_ubuntu
+
   tasks:
   - name: Colorize root shell prompt
     lineinfile:
